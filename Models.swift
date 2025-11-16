@@ -7,7 +7,7 @@ import VisionKit
 // MARK: - Data Models
 
 struct Meal: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     var name: String
     var calories: Double
     var protein: Double
@@ -38,7 +38,7 @@ struct DailyMeals: Codable {
 }
 
 struct ShoppingItem: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     var name: String
     var quantity: String
     var unit: String
@@ -58,7 +58,7 @@ struct MealShoppingGroup {
 }
 
 struct CustomDish: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     var name: String
     var ingredients: [Ingredient]
     var instructions: String
@@ -75,7 +75,7 @@ struct CustomDish: Identifiable, Codable {
 }
 
 struct Ingredient: Identifiable, Codable {
-    let id = UUID()
+    var id = UUID()
     var name: String
     var amount: String
     var unit: String
@@ -88,10 +88,58 @@ class DietManager: ObservableObject {
     @Published var shoppingItems: [ShoppingItem] = []
     @Published var customDishes: [CustomDish] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
+
+    // Shopping categories with persistent state
+    @Published var shoppingCategories: [ShoppingCategory] = []
+
+    // Meal-based shopping items with persistent state
+    @Published var mealShoppingItems: [MealShoppingGroup] = []
     
-    // Sample shopping categories
-    var shoppingCategories: [ShoppingCategory] {
-        [
+    init() {
+        loadSampleData()
+        loadCustomDishes()
+    }
+    
+    private func loadSampleData() {
+        let today = Date()
+        let meal1 = Meal(
+            name: "Omlet - na słodko a'la sernik",
+            calories: 590,
+            protein: 43,
+            fat: 22,
+            carbs: 60,
+            eaten: true
+        )
+
+        let meal2 = Meal(
+            name: "Makaron - z kurczakiem, pieczarkami i ajvarem",
+            calories: 580,
+            protein: 45,
+            fat: 16,
+            carbs: 61,
+            eaten: true
+        )
+
+        let meal3 = Meal(
+            name: "Tortilla - z serkiem śmietankowym i serem",
+            calories: 613,
+            protein: 36,
+            fat: 35,
+            carbs: 40,
+            eaten: false
+        )
+
+        dailyMeals[today] = DailyMeals(
+            date: today,
+            breakfast: meal1,
+            lunch: meal2,
+            dinner: nil,
+            snack: meal3
+        )
+
+        // Initialize shopping categories
+        shoppingCategories = [
             ShoppingCategory(name: "Pieczywo", items: [
                 ShoppingItem(name: "Chleb żytni na zakwasie", quantity: "300", unit: "g", category: "Pieczywo")
             ]),
@@ -108,10 +156,9 @@ class DietManager: ObservableObject {
                 ShoppingItem(name: "Masło orzechowe", quantity: "70", unit: "g", category: "Orzechy i nasiona")
             ])
         ]
-    }
-    
-    var mealShoppingItems: [MealShoppingGroup] {
-        [
+
+        // Initialize meal-based shopping items
+        mealShoppingItems = [
             MealShoppingGroup(
                 mealName: "Omlet - na słodko a'la sernik",
                 servings: 2,
@@ -144,50 +191,25 @@ class DietManager: ObservableObject {
         ]
     }
     
-    init() {
-        loadSampleData()
+    // MARK: - Shopping List Management
+    func toggleShoppingItemInCategory(categoryName: String, itemId: UUID) {
+        if let categoryIndex = shoppingCategories.firstIndex(where: { $0.name == categoryName }),
+           let itemIndex = shoppingCategories[categoryIndex].items.firstIndex(where: { $0.id == itemId }) {
+            shoppingCategories[categoryIndex].items[itemIndex].isChecked.toggle()
+        }
     }
-    
-    private func loadSampleData() {
-        let today = Date()
-        let meal1 = Meal(
-            name: "Omlet - na słodko a'la sernik",
-            calories: 590,
-            protein: 43,
-            fat: 22,
-            carbs: 60,
-            eaten: true
-        )
-        
-        let meal2 = Meal(
-            name: "Makaron - z kurczakiem, pieczarkami i ajvarem",
-            calories: 580,
-            protein: 45,
-            fat: 16,
-            carbs: 61,
-            eaten: true
-        )
-        
-        let meal3 = Meal(
-            name: "Tortilla - z serkiem śmietankowym i serem",
-            calories: 613,
-            protein: 36,
-            fat: 35,
-            carbs: 40,
-            eaten: false
-        )
-        
-        dailyMeals[today] = DailyMeals(
-            date: today,
-            breakfast: meal1,
-            lunch: meal2,
-            dinner: nil,
-            snack: meal3
-        )
+
+    func toggleShoppingItemInMeal(mealName: String, itemId: UUID) {
+        if let mealIndex = mealShoppingItems.firstIndex(where: { $0.mealName == mealName }),
+           let itemIndex = mealShoppingItems[mealIndex].items.firstIndex(where: { $0.id == itemId }) {
+            mealShoppingItems[mealIndex].items[itemIndex].isChecked.toggle()
+        }
     }
-    
+
+    // MARK: - Meal Management
     func getMeal(for date: Date, mealType: MealType) -> Meal? {
-        guard let meals = dailyMeals[Calendar.current.startOfDay(for: date)] else { return nil }
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        guard let meals = dailyMeals[normalizedDate] else { return nil }
         
         switch mealType {
         case .breakfast:
@@ -202,27 +224,28 @@ class DietManager: ObservableObject {
     }
     
     func getMeals(for date: Date) -> [Meal] {
-        guard let meals = dailyMeals[Calendar.current.startOfDay(for: date)] else { return [] }
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        guard let meals = dailyMeals[normalizedDate] else { return [] }
         
         return [meals.breakfast, meals.lunch, meals.dinner, meals.snack].compactMap { $0 }
     }
     
     func toggleMealEaten(for date: Date, mealType: MealType) {
-        let dayStart = Calendar.current.startOfDay(for: date)
-        
-        if dailyMeals[dayStart] == nil {
-            dailyMeals[dayStart] = DailyMeals(date: dayStart)
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+
+        if dailyMeals[normalizedDate] == nil {
+            dailyMeals[normalizedDate] = DailyMeals(date: normalizedDate)
         }
-        
+
         switch mealType {
         case .breakfast:
-            dailyMeals[dayStart]?.breakfast?.eaten.toggle()
+            dailyMeals[normalizedDate]?.breakfast?.eaten.toggle()
         case .lunch:
-            dailyMeals[dayStart]?.lunch?.eaten.toggle()
+            dailyMeals[normalizedDate]?.lunch?.eaten.toggle()
         case .dinner:
-            dailyMeals[dayStart]?.dinner?.eaten.toggle()
+            dailyMeals[normalizedDate]?.dinner?.eaten.toggle()
         case .snack:
-            dailyMeals[dayStart]?.snack?.eaten.toggle()
+            dailyMeals[normalizedDate]?.snack?.eaten.toggle()
         }
     }
     
@@ -237,32 +260,56 @@ class DietManager: ObservableObject {
     // MARK: - PDF Import
     func importDietFromPDF(url: URL) {
         isLoading = true
-        
+        errorMessage = nil
+
         // Extract text from PDF
         guard let pdfDocument = PDFDocument(url: url) else {
             isLoading = false
+            errorMessage = "Nie udało się otworzyć pliku PDF. Upewnij się, że plik nie jest uszkodzony."
             return
         }
-        
+
+        guard pdfDocument.pageCount > 0 else {
+            isLoading = false
+            errorMessage = "Plik PDF jest pusty."
+            return
+        }
+
         var extractedText = ""
         for pageIndex in 0..<pdfDocument.pageCount {
             guard let page = pdfDocument.page(at: pageIndex) else { continue }
             extractedText += page.string ?? ""
         }
-        
+
+        guard !extractedText.isEmpty else {
+            isLoading = false
+            errorMessage = "Nie znaleziono tekstu w pliku PDF. Upewnij się, że plik zawiera plan żywieniowy."
+            return
+        }
+
         // Parse meals from extracted text
-        parseMealsFromText(extractedText)
-        
+        do {
+            try parseMealsFromText(extractedText)
+        } catch {
+            errorMessage = "Błąd podczas przetwarzania pliku PDF: \(error.localizedDescription)"
+        }
+
         isLoading = false
     }
     
-    private func parseMealsFromText(_ text: String) {
+    private func parseMealsFromText(_ text: String) throws {
         // Implement parsing logic based on PDF structure
         // This would need to be customized based on the specific PDF format
-        
+
         // Example parsing logic:
         let lines = text.components(separatedBy: .newlines)
-        
+
+        guard !lines.isEmpty else {
+            throw NSError(domain: "DietManager", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Nie znaleziono danych do przetworzenia"
+            ])
+        }
+
         for line in lines {
             // Look for meal patterns
             if line.contains("Śniadanie") || line.contains("Obiad") || line.contains("Kolacja") {
@@ -270,7 +317,7 @@ class DietManager: ObservableObject {
                 // Create Meal objects
                 // Add to dailyMeals
             }
-            
+
             // Look for ingredients for shopping list
             if line.contains("g") || line.contains("ml") || line.contains("szt") {
                 // Extract ingredient details
@@ -292,16 +339,26 @@ class DietManager: ObservableObject {
     }
     
     private func saveCustomDishes() {
-        // Save to UserDefaults or Core Data
-        if let encoded = try? JSONEncoder().encode(customDishes) {
+        do {
+            let encoded = try JSONEncoder().encode(customDishes)
             UserDefaults.standard.set(encoded, forKey: "customDishes")
+        } catch {
+            print("Error saving custom dishes: \(error.localizedDescription)")
+            errorMessage = "Nie udało się zapisać własnych potraw."
         }
     }
-    
+
     private func loadCustomDishes() {
-        if let data = UserDefaults.standard.data(forKey: "customDishes"),
-           let dishes = try? JSONDecoder().decode([CustomDish].self, from: data) {
-            customDishes = dishes
+        guard let data = UserDefaults.standard.data(forKey: "customDishes") else {
+            // No saved data yet, this is normal on first launch
+            return
+        }
+
+        do {
+            customDishes = try JSONDecoder().decode([CustomDish].self, from: data)
+        } catch {
+            print("Error loading custom dishes: \(error.localizedDescription)")
+            errorMessage = "Nie udało się wczytać zapisanych potraw."
         }
     }
 }

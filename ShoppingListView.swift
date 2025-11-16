@@ -72,7 +72,7 @@ struct ShoppingListView: View {
 
 struct CategoryListView: View {
     @EnvironmentObject var dietManager: DietManager
-    
+
     var body: some View {
         VStack(spacing: 15) {
             ForEach(dietManager.shoppingCategories, id: \.name) { category in
@@ -80,9 +80,17 @@ struct CategoryListView: View {
                     Text(category.name)
                         .font(.headline)
                         .foregroundColor(.green)
-                    
+
                     ForEach(category.items, id: \.id) { item in
-                        ShoppingItemRow(item: item)
+                        ShoppingItemRow(
+                            item: item,
+                            onToggle: {
+                                dietManager.toggleShoppingItemInCategory(
+                                    categoryName: category.name,
+                                    itemId: item.id
+                                )
+                            }
+                        )
                     }
                 }
             }
@@ -92,7 +100,7 @@ struct CategoryListView: View {
 
 struct MealBasedListView: View {
     @EnvironmentObject var dietManager: DietManager
-    
+
     var body: some View {
         VStack(spacing: 20) {
             ForEach(dietManager.mealShoppingItems, id: \.mealName) { mealGroup in
@@ -104,22 +112,30 @@ struct MealBasedListView: View {
                         Text("(\(mealGroup.servings) porcje)")
                             .font(.caption)
                             .foregroundColor(.gray)
-                        
+
                         Spacer()
-                        
+
                         Button(action: {}) {
                             Image(systemName: "pencil")
                                 .foregroundColor(.gray)
                         }
-                        
+
                         Button(action: {}) {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.gray)
                         }
                     }
-                    
+
                     ForEach(mealGroup.items, id: \.id) { item in
-                        ShoppingItemRow(item: item)
+                        ShoppingItemRow(
+                            item: item,
+                            onToggle: {
+                                dietManager.toggleShoppingItemInMeal(
+                                    mealName: mealGroup.mealName,
+                                    itemId: item.id
+                                )
+                            }
+                        )
                     }
                 }
                 .padding()
@@ -132,24 +148,24 @@ struct MealBasedListView: View {
 
 struct ShoppingItemRow: View {
     let item: ShoppingItem
-    @State private var isChecked = false
-    
+    let onToggle: () -> Void
+
     var body: some View {
         HStack {
-            Button(action: { isChecked.toggle() }) {
-                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isChecked ? .green : .gray)
+            Button(action: onToggle) {
+                Image(systemName: item.isChecked ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(item.isChecked ? .green : .gray)
                     .font(.system(size: 22))
             }
-            
+
             VStack(alignment: .leading) {
                 Text(item.name)
-                    .strikethrough(isChecked)
-                    .foregroundColor(isChecked ? .gray : .black)
+                    .strikethrough(item.isChecked)
+                    .foregroundColor(item.isChecked ? .gray : .black)
             }
-            
+
             Spacer()
-            
+
             VStack(alignment: .trailing) {
                 Text(item.quantity)
                     .font(.caption)
